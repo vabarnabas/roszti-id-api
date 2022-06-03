@@ -1,4 +1,4 @@
-import express, { Express, Request, Response } from "express";
+import express, { Express, NextFunction, Request, Response } from "express";
 import { PrismaClient, User } from "@prisma/client";
 import { compare, genSalt, hash } from "bcrypt";
 import jwt from "jsonwebtoken";
@@ -10,13 +10,29 @@ app.use(express.json());
 
 const prisma = new PrismaClient();
 
+const verifyToken = (req: Request, res: Response, next: NextFunction) => {
+  const bearerHeader = req.headers["authorization"];
+  if (bearerHeader) {
+    const bearerToken = bearerHeader.slice(7);
+    jwt.verify(bearerToken, "ESTIEM2022", (err, decoded) => {
+      if (err) {
+        res.status(401);
+      } else if (decoded) {
+        next();
+      }
+    });
+  } else {
+    res.status(401).json({ error: "Missing argument Authorization Header." });
+  }
+};
+
 //Get Users
-app.get("/users", async (req: Request, res: Response) => {
+app.get("/users", verifyToken, async (req: Request, res: Response) => {
   const users: User[] = await prisma.user.findMany();
   res.send(users);
 });
 
-app.get("/users/:id", async (req: Request, res: Response) => {
+app.get("/users/:id", verifyToken, async (req: Request, res: Response) => {
   const { id } = req.params;
 
   try {
@@ -28,7 +44,7 @@ app.get("/users/:id", async (req: Request, res: Response) => {
 });
 
 //Create User
-app.post("/users/create", async (req: Request, res: Response) => {
+app.post("/users/create", verifyToken, async (req: Request, res: Response) => {
   const data: User = req.body;
 
   try {
@@ -43,44 +59,52 @@ app.post("/users/create", async (req: Request, res: Response) => {
 });
 
 //Update User
-app.put("/users/update/:id", async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const data = req.body;
+app.put(
+  "/users/update/:id",
+  verifyToken,
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const data = req.body;
 
-  if (data?.password) {
-    const salt = await genSalt();
-    data.password = await hash(data.password, salt);
-  }
+    if (data?.password) {
+      const salt = await genSalt();
+      data.password = await hash(data.password, salt);
+    }
 
-  try {
-    const deleteUser = await prisma.user.update({
-      where: { id },
-      data: { ...data },
-    });
-    res.send(deleteUser);
-  } catch (error) {
-    res.status(400).send({ error: error });
+    try {
+      const deleteUser = await prisma.user.update({
+        where: { id },
+        data: { ...data },
+      });
+      res.send(deleteUser);
+    } catch (error) {
+      res.status(400).send({ error: error });
+    }
   }
-});
+);
 
 //Delete User
-app.delete("/users/delete/:id", async (req: Request, res: Response) => {
-  const { id } = req.params;
+app.delete(
+  "/users/delete/:id",
+  verifyToken,
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
 
-  try {
-    const deleteUser = await prisma.user.delete({
-      where: { id },
-    });
-    res.json(deleteUser);
-  } catch (error) {
-    res.status(400).json({ error: error });
+    try {
+      const deleteUser = await prisma.user.delete({
+        where: { id },
+      });
+      res.json(deleteUser);
+    } catch (error) {
+      res.status(400).json({ error: error });
+    }
   }
-});
+);
 
 //Authenticate User
 app.post("/login", async (req: Request, res: Response) => {
   const userData: {
-    id: string;
+    email: string;
     password: string;
   } = req.body;
 
@@ -88,15 +112,16 @@ app.post("/login", async (req: Request, res: Response) => {
     res.send(400).json({ error: "Missing argument from body." });
   }
 
-  const user = await prisma.user.findUnique({ where: { id: userData.id } });
+  const user = await prisma.user.findMany({
+    where: { email: userData.email },
+  });
 
-  if (user && (await compare(userData.password, user.password))) {
+  if (user && (await compare(userData.password, user[0].password))) {
     jwt.sign(
       { user },
-      "ssssssss",
-      { algorithm: "HS256" },
+      "ESTIEM2022",
+      { algorithm: "HS256", expiresIn: "2h" },
       function (err, token) {
-        console.log(token);
         res.json({ token });
       }
     );
