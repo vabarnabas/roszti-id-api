@@ -31,7 +31,7 @@ const verifyToken = (req: Request, res: Response, next: NextFunction) => {
 //Get Users
 app.get("/users", verifyToken, async (req: Request, res: Response) => {
   const users: User[] = await prisma.user.findMany();
-  res.send(users);
+  res.send({ data: users });
 });
 
 app.get("/users/:id", verifyToken, async (req: Request, res: Response) => {
@@ -39,7 +39,7 @@ app.get("/users/:id", verifyToken, async (req: Request, res: Response) => {
 
   try {
     const user = await prisma.user.findUnique({ where: { id } });
-    res.send(user);
+    res.send({ data: user });
   } catch (error) {
     res.status(400).send({ error: error });
   }
@@ -54,7 +54,7 @@ app.post("/users/create", verifyToken, async (req: Request, res: Response) => {
     const newUser = await prisma.user.create({
       data: { ...data, password: await hash(data.password, salt) },
     });
-    res.send(newUser);
+    res.send({ data: newUser });
   } catch (error) {
     res.status(400).send({ error: error });
   }
@@ -74,11 +74,11 @@ app.put(
     }
 
     try {
-      const deleteUser = await prisma.user.update({
+      const updateUser = await prisma.user.update({
         where: { id },
         data: { ...data },
       });
-      res.send(deleteUser);
+      res.send({ data: updateUser });
     } catch (error) {
       res.status(400).send({ error: error });
     }
@@ -96,7 +96,7 @@ app.delete(
       const deleteUser = await prisma.user.delete({
         where: { id },
       });
-      res.json(deleteUser);
+      res.json({ data: deleteUser });
     } catch (error) {
       res.status(400).json({ error: error });
     }
@@ -124,7 +124,7 @@ app.post("/login", async (req: Request, res: Response) => {
       "ESTIEM2022",
       { algorithm: "HS256", expiresIn: "2h" },
       function (err, token) {
-        res.json({ token });
+        res.json({ data: { token } });
       }
     );
   } else {
@@ -140,7 +140,7 @@ app.post("/current", verifyToken, async (req: Request, res: Response) => {
     res.status(401);
   }
   const user = await prisma.user.findUnique({ where: { id: decoded.id } });
-  res.json({ ...user });
+  res.json({ data: user });
 });
 
 app.listen(port, () => {
