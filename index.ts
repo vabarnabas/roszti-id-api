@@ -10,14 +10,16 @@ app.use(express.json());
 
 const prisma = new PrismaClient();
 
+//Verify Token Middleware
 const verifyToken = (req: Request, res: Response, next: NextFunction) => {
   const bearerHeader = req.headers["authorization"];
   if (bearerHeader) {
     const bearerToken = bearerHeader.slice(7);
     jwt.verify(bearerToken, "ESTIEM2022", (err, decoded) => {
       if (err) {
-        res.status(401);
+        res.status(401).json({ error: "Unathorized or expired token." });
       } else if (decoded) {
+        req.body = { ...req.body, decoded };
         next();
       }
     });
@@ -118,7 +120,7 @@ app.post("/login", async (req: Request, res: Response) => {
 
   if (user && (await compare(userData.password, user[0].password))) {
     jwt.sign(
-      { user },
+      { id: user[0].id },
       "ESTIEM2022",
       { algorithm: "HS256", expiresIn: "2h" },
       function (err, token) {
@@ -130,6 +132,15 @@ app.post("/login", async (req: Request, res: Response) => {
       .status(401)
       .json({ error: "Invalid login credentials or missing user." });
   }
+});
+
+app.post("/current", verifyToken, async (req: Request, res: Response) => {
+  const { decoded } = req.body;
+  if (!decoded.id) {
+    res.status(401);
+  }
+  const user = await prisma.user.findUnique({ where: { id: decoded.id } });
+  res.json({ ...user });
 });
 
 app.listen(port, () => {
